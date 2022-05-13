@@ -7,6 +7,7 @@ import {
   isIntrinsic,
   JsSourceFileNode,
   NeverType,
+  OperationSignature,
   ProjectionModelExpressionNode,
   ProjectionModelPropertyNode,
   ProjectionModelSpreadPropertyNode,
@@ -757,6 +758,7 @@ export function createChecker(program: Program): Checker {
       | ModelStatementNode
       | AliasStatementNode
       | InterfaceStatementNode
+      | OperationStatementNode,
       | UnionStatementNode,
     args: Type[]
   ): Type {
@@ -1011,17 +1013,41 @@ export function createChecker(program: Program): Checker {
   function checkOperation(
     node: OperationStatementNode,
     parentInterface?: InterfaceType
-  ): OperationType {
+  ): OperationType | ErrorType {
     const namespace = getParentNamespaceType(node);
     const name = node.id.sv;
     const decorators = checkDecorators(node);
+
+    let signature: OperationSignature | undefined = undefined;
+    if (node.signature.kind === SyntaxKind.TypeReference) {
+      const t = getTypeForNode(node.signature);
+      console.log("FOUND TYPE:", t);
+      if (t.kind !== "Operation") {
+        program.reportDiagnostic(
+          createDiagnostic({
+            code: "intersect-duplicate-property",
+            format: { propName: "FAF" },
+            target: node,
+          })
+        );
+        return errorType;
+      }
+
+      // TODO: Check that it's actually a signature!
+      signature = t.node.signature as OperationSignature;
+
+      console.log("SIGN:", signature);
+    } else {
+      signature = node.signature;
+    }
+
     const type: OperationType = createType({
       kind: "Operation",
       name,
       namespace,
       node,
-      parameters: getTypeForNode(node.parameters) as ModelType,
-      returnType: getTypeForNode(node.returnType),
+      parameters: getTypeForNode(signature.parameters) as ModelType,
+      returnType: getTypeForNode(signature.returnType),
       decorators,
       interface: parentInterface,
     });
@@ -2071,17 +2097,20 @@ export function createChecker(program: Program): Checker {
   ) {
     for (const opNode of node.operations) {
       const opType = checkOperation(opNode, interfaceType);
-      if (members.has(opType.name)) {
-        program.reportDiagnostic(
-          createDiagnostic({
-            code: "interface-duplicate",
-            format: { name: opType.name },
-            target: opNode,
-          })
-        );
-        continue;
+      if (opType.kind === "Operation") {
+        if (members.has(opType.name)) {
+          program.reportDiagnostic(
+            createDiagnostic({
+              code: "interface-duplicate",
+              format: { name: opType.name },
+              target: opNode,
+            })
+          );
+          continue;
+        }
+
+        members.set(opType.name, opType);
       }
-      members.set(opType.name, opType);
     }
   }
 

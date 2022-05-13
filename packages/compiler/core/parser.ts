@@ -44,6 +44,7 @@ import {
   Node,
   NodeFlags,
   NumericLiteralNode,
+  OperationSignature,
   OperationStatementNode,
   ProjectionBlockExpressionNode,
   ProjectionEnumSelectorNode,
@@ -545,15 +546,17 @@ export function parse(code: string | SourceFile, options: ParseOptions = {}): Ca
     parseOptional(Token.OpKeyword);
 
     const id = parseIdentifier();
-    const parameters = parseOperationParameters();
-    parseExpected(Token.Colon);
+    const signature = parseOperationSignatureOrReference(pos, decorators);
 
-    const returnType = parseExpression();
+    if (signature.kind === SyntaxKind.OperationSignature) {
+      // Clear the decorator list because the operation signature now owns it
+      decorators = [];
+    }
+
     return {
       kind: SyntaxKind.OperationStatement,
       id,
-      parameters,
-      returnType,
+      signature,
       decorators,
       ...finishNode(pos),
     };
@@ -608,6 +611,33 @@ export function parse(code: string | SourceFile, options: ParseOptions = {}): Ca
     };
   }
 
+  function parseOperationSignatureOrReference(
+    pos: number,
+    decorators: DecoratorExpressionNode[]
+  ): OperationSignature | TypeReferenceNode {
+    let signatureOrReference: OperationSignature | TypeReferenceNode | undefined = undefined;
+    if (token() === Token.OpenParen) {
+      const parameters = parseOperationParameters();
+      parseExpected(Token.Colon);
+      const returnType = parseExpression();
+
+      signatureOrReference = {
+        kind: SyntaxKind.OperationSignature,
+        parameters,
+        returnType,
+        decorators,
+        ...finishNode(pos),
+      };
+    } else {
+      parseExpected(Token.Colon);
+      signatureOrReference = parseReferenceExpression();
+    }
+
+    parseExpected(Token.Semicolon);
+
+    return signatureOrReference;
+  }
+
   function parseOperationStatement(
     pos: number,
     decorators: DecoratorExpressionNode[]
@@ -615,17 +645,17 @@ export function parse(code: string | SourceFile, options: ParseOptions = {}): Ca
     parseExpected(Token.OpKeyword);
 
     const id = parseIdentifier();
-    const parameters = parseOperationParameters();
-    parseExpected(Token.Colon);
+    const signature = parseOperationSignatureOrReference(pos, decorators);
 
-    const returnType = parseExpression();
-    parseExpected(Token.Semicolon);
+    if (signature.kind === SyntaxKind.OperationSignature) {
+      // Clear the decorator list because the operation signature now owns it
+      decorators = [];
+    }
 
     return {
       kind: SyntaxKind.OperationStatement,
       id,
-      parameters,
-      returnType,
+      signature,
       decorators,
       ...finishNode(pos),
     };
@@ -2156,8 +2186,9 @@ export function visitChildren<T>(node: Node, cb: NodeCallback<T>): T | undefined
       return (
         visitEach(cb, node.decorators) ||
         visitNode(cb, node.id) ||
-        visitNode(cb, node.parameters) ||
-        visitNode(cb, node.returnType)
+        (node.signature.kind === SyntaxKind.OperationSignature
+          ? visitNode(cb, node.signature.parameters) || visitNode(cb, node.signature.returnType)
+          : visitNode(cb, node.signature))
       );
     case SyntaxKind.NamespaceStatement:
       return (

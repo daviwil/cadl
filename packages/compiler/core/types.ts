@@ -59,6 +59,8 @@ export type Type =
 
 export type TypeOrReturnRecord = Type | ReturnRecord;
 
+export type OperationSignatureOrReference = OperationSignature | TypeReferenceNode;
+
 export interface FunctionType extends BaseType {
   kind: "Function";
   call(...args: any[]): Type;
@@ -204,7 +206,7 @@ export interface EnumMemberType extends BaseType, DecoratedType {
   value?: string | number;
 }
 
-export interface OperationType extends BaseType, DecoratedType {
+export interface OperationType extends BaseType, DecoratedType, TemplatedType {
   kind: "Operation";
   node: OperationStatementNode;
   name: string;
@@ -388,6 +390,7 @@ export enum SyntaxKind {
   NamespaceStatement,
   UsingStatement,
   OperationStatement,
+  OperationSignature,
   ModelStatement,
   ModelExpression,
   ModelProperty,
@@ -668,10 +671,16 @@ export interface UsingStatementNode extends BaseNode {
   readonly name: IdentifierNode | MemberExpressionNode;
 }
 
-export interface OperationStatementNode extends BaseNode, DeclarationNode {
-  readonly kind: SyntaxKind.OperationStatement;
+export interface OperationSignature {
+  readonly kind: SyntaxKind.OperationSignature;
   readonly parameters: ModelExpressionNode;
   readonly returnType: Expression;
+  readonly decorators: readonly DecoratorExpressionNode[];
+}
+
+export interface OperationStatementNode extends BaseNode, DeclarationNode, TemplateDeclarationNode {
+  readonly kind: SyntaxKind.OperationStatement;
+  readonly signature: OperationSignatureOrReference;
   readonly decorators: readonly DecoratorExpressionNode[];
 }
 

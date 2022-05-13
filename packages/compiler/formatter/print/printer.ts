@@ -814,7 +814,10 @@ function isModelExpressionInBlock(path: AstPath<ModelExpressionNode>) {
 
   switch (parent?.kind) {
     case SyntaxKind.OperationStatement:
-      return parent.parameters !== path.getNode();
+      return (
+        parent.signature.kind === SyntaxKind.OperationSignature &&
+        parent.signature.parameters !== path.getNode()
+      );
     default:
       return true;
   }
@@ -863,16 +866,27 @@ export function printOperationStatement(
     tryInline: true,
   });
 
-  return [
-    decorators,
-    inInterface ? "" : "op ",
-    path.call(print, "id"),
-    "(",
-    path.call(print, "parameters"),
-    "): ",
-    path.call(print, "returnType"),
-    `;`,
-  ];
+  if (path.getValue().signature.kind === SyntaxKind.TypeReference) {
+    return [
+      decorators,
+      inInterface ? "" : "op ",
+      path.call(print, "id"),
+      ": ",
+      path.call(print, "signature"),
+      `;`,
+    ];
+  } else {
+    return [
+      decorators,
+      inInterface ? "" : "op ",
+      path.call(print, "id"),
+      "(",
+      path.call(print, "signature.parameters"),
+      "): ",
+      path.call(print, "signature.returnType"),
+      `;`,
+    ];
+  }
 }
 
 export function printStatementSequence<T extends Node>(
