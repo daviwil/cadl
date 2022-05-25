@@ -402,6 +402,11 @@ function buildRoutes(
       continue;
     }
 
+    // Skip templated operations
+    if (op.templateArguments && op.templateArguments.length > 0) {
+      continue;
+    }
+
     const route = getPathForOperation(program, op, parentFragments, options);
     const verb = getVerbForOperation(program, op, route.parameters);
     const responses = getResponsesForOperation(program, op);
